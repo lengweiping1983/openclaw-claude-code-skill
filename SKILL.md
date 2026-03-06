@@ -747,6 +747,448 @@ bash -x ./scripts/claude-wrapper.sh task "analyze code"
 ./scripts/claude-config-validator.sh
 ```
 
+## Working with Subagents
+
+Subagents are specialized AI agents that you can create and deploy for specific tasks within Claude Code. They allow you to delegate work to purpose-built agents with custom prompts, tools, and configurations.
+
+### What are Subagents and When to Use Them
+
+Subagents are lightweight, task-focused agents that:
+- **Specialize in specific domains** (testing, security, documentation, etc.)
+- **Have custom prompts and tool sets** tailored to their purpose
+- **Can be invoked on-demand** from your main Claude session
+- **Share context** with the parent agent while maintaining their focus
+
+**Use subagents when you need to:**
+- Perform repetitive specialized tasks (code reviews, test generation)
+- Ensure consistent analysis patterns across your codebase
+- Delegate work while maintaining quality standards
+- Create reusable expertise for your team
+
+### Creating Subagents from OpenClaw
+
+#### Method 1: Using /agents Command in Interactive Mode
+
+From within a Claude Code session, use the `/agents` command to create and manage subagents:
+
+```bash
+# Start interactive session
+./scripts/claude-wrapper.sh interactive
+
+# In the session, create a subagent
+/agents create code-reviewer "Expert code reviewer focused on security and performance"
+
+# Or load from a file
+/agents load ~/.claude/agents/security-auditor.md
+```
+
+#### Method 2: Creating .md Files Manually
+
+Create subagent definition files in `~/.claude/agents/`:
+
+```bash
+# Create agents directory if it doesn't exist
+mkdir -p ~/.claude/agents/
+
+# Create a subagent file
+nano ~/.claude/agents/api-tester.md
+```
+
+#### Method 3: Using CLI --agents Flag for One-Time Use
+
+Define subagents for a single session:
+
+```bash
+./scripts/claude-wrapper.sh task \
+  --agents '{
+    "performance-optimizer": {
+      "description": "Analyzes and optimizes code performance",
+      "prompt": "You are a performance optimization expert. Focus on:",
+      "tools": ["Read", "Grep", "Bash", "mcp__chrome-devtools__performance_start_trace"],
+      "model": "sonnet"
+    }
+  }' \
+  "Use performance-optimizer to analyze src/components/"
+```
+
+### Complete Workflow Example from OpenClaw
+
+Let's walk through creating and using a code review subagent:
+
+#### Step 1: Create a Code-Review Subagent
+
+Create `~/.claude/agents/code-reviewer.md`:
+
+```markdown
+---
+name: code-reviewer
+description: Senior developer focused on code quality, security, and best practices
+tools: Read, Grep, Glob, Bash
+model: sonnet
+permissionMode: plan
+---
+
+You are an experienced code reviewer with expertise in:
+- Security vulnerabilities (OWASP Top 10)
+- Code quality and maintainability
+- Performance optimization
+- Design patterns and architecture
+
+When reviewing code:
+1. Identify potential security issues
+2. Check for code smells and anti-patterns
+3. Suggest performance improvements
+4. Verify adherence to best practices
+5. Provide constructive feedback with examples
+
+Always be thorough but constructive in your reviews.
+```
+
+#### Step 2: Create Test Files with Intentional Issues
+
+```bash
+# Create a test directory
+mkdir -p test-review
+cd test-review
+
+# Create a file with intentional issues
+cat > vulnerable-api.js << 'EOF'
+const express = require('express');
+const app = express();
+
+// Security issues: No input validation, SQL injection possible
+app.get('/users/:id', (req, res) => {
+  const userId = req.params.id;
+  const query = `SELECT * FROM users WHERE id = ${userId}`;
+  // Direct SQL execution - vulnerable to injection
+  db.query(query, (err, results) => {
+    if (err) {
+      console.log('Error: ' + err);
+      res.status(500).send('Database error');
+    }
+    res.json(results);
+  });
+});
+
+// Performance issue: Inefficient loop
+app.get('/process', (req, res) => {
+  const items = Array(10000).fill(0).map((_, i) => i);
+  let sum = 0;
+  // O(n^2) operation for simple sum
+  for (let i = 0; i < items.length; i++) {
+    for (let j = 0; j <= i; j++) {
+      if (j === i) sum += items[i];
+    }
+  }
+  res.json({ sum });
+});
+
+app.listen(3000);
+EOF
+```
+
+#### Step 3: Invoke the Subagent to Review Code
+
+```bash
+# Load the subagent and review the code
+./scripts/claude-wrapper.sh task \
+  --agents "$(cat ~/.claude/agents/code-reviewer.md)" \
+  "Use the code-reviewer agent to review test-review/vulnerable-api.js for security and performance issues"
+```
+
+#### Step 4: View Results
+
+The subagent will provide detailed analysis including:
+- **Security Issues**: SQL injection vulnerability, lack of input validation
+- **Performance Problems**: O(n^2) algorithm where O(n) would suffice
+- **Code Quality**: Error handling improvements, logging practices
+- **Recommendations**: Parameterized queries, algorithm optimization
+
+### Subagent Configuration Options
+
+#### Basic Configuration
+
+```yaml
+name: security-auditor              # Unique identifier
+description: Scans for security vulnerabilities  # Short purpose description
+tools: Read, Grep, Glob, Bash      # Available tools (comma-separated)
+model: sonnet                       # Model choice: haiku, sonnet, or opus
+permissionMode: plan               # Permission handling mode
+```
+
+#### Advanced Configuration Options
+
+```yaml
+---
+name: documentation-writer
+description: Creates comprehensive documentation for codebases
+tools: Read, Grep, Glob, Write, Edit
+model: sonnet
+permissionMode: acceptEdits         # Auto-accept file modifications
+memory:                             # Memory settings
+  enabled: true                     # Enable memory for this subagent
+  namespace: docs                   # Memory namespace
+  fallbackToParent: true            # Use parent agent's memory if needed
+hooks:                              # Lifecycle hooks
+  beforeStart: |
+    echo "Documentation generation starting..."
+    # Validate project structure
+    if [ ! -f "README.md" ]; then
+      echo "Warning: No README.md found"
+    fi
+  afterComplete: |
+    echo "Documentation complete!"
+    # Trigger rebuild if needed
+    if command -v mkdocs &> /dev/null; then
+      mkdocs build
+    fi
+disallowedTools: Bash(rm), Bash(sudo)  # Explicitly forbidden tools
+timeout: 300                        # Maximum execution time in seconds
+maxTurns: 20                        # Maximum number of turns
+```
+
+### Example Subagent File Format with Comments
+
+```markdown
+---
+# Required: Unique identifier for the subagent
+name: test-generator
+
+# Required: Brief description of purpose and capabilities
+description: Creates comprehensive test suites with high coverage
+
+# Required: Comma-separated list of available tools
+tools: Read, Write, Edit, Grep, Glob, Bash
+
+# Optional: Model selection (default: sonnet)
+model: sonnet
+
+# Optional: Permission mode (default: default)
+# Options: default, acceptEdits, dontAsk, bypassPermissions, plan
+permissionMode: acceptEdits
+
+# Optional: Memory configuration
+memory:
+  enabled: true              # Enable persistent memory
+  namespace: tests           # Isolate memory by namespace
+  fallbackToParent: false    # Don't use parent memory
+
+# Optional: Hooks for lifecycle events
+hooks:
+  # Run before subagent starts
+  beforeStart: |
+    echo "Analyzing codebase structure..."
+    find . -name "*.test.*" -o -name "*.spec.*" | head -5
+
+  # Run after subagent completes
+  afterComplete: |
+    echo "Test generation complete!"
+    npm test 2>/dev/null || echo "Run tests manually"
+
+# Optional: Tools to explicitly disallow
+disallowedTools: Bash(rm -rf), Bash(sudo), Write(/etc/)
+
+# Optional: Execution limits
+timeout: 600                 # 10 minute timeout
+maxTurns: 50                 # Limit conversation turns
+
+# Optional: Custom working directory
+workDir: ./test-output       # Relative to project root
+
+# Optional: Environment variables
+env:
+  TEST_FRAMEWORK: jest       # Set framework preference
+  COVERAGE_THRESHOLD: 80     # Set coverage target
+---
+
+# System prompt for the subagent
+You are a test generation specialist with expertise in:
+- Unit testing best practices
+- Integration test design
+- Test coverage optimization
+- Mocking and stubbing strategies
+
+When creating tests:
+1. Analyze the existing code structure and patterns
+2. Follow the project's testing conventions
+3. Aim for >80% code coverage
+4. Include edge cases and error scenarios
+5. Use descriptive test names that explain the behavior
+
+Always verify tests pass before completing.
+```
+
+### Best Practices for Using Subagents from OpenClaw
+
+#### 1. Use Wrapper Script with Subagent Parameter
+
+Always use the wrapper script when invoking subagents from OpenClaw:
+
+```bash
+# ✅ Correct: Uses wrapper with proper TTY handling
+./scripts/claude-wrapper.sh task \
+  --agents "$(cat ~/.claude/agents/my-subagent.md)" \
+  "Use my-subagent to analyze the codebase"
+
+# ❌ Incorrect: Direct call may fail
+claude --agents "my-subagent" "analyze code"
+```
+
+#### 2. Handle TTY Requirements
+
+For automation scripts that call subagents:
+
+```python
+# Python example with proper TTY handling
+import subprocess
+import os
+
+def invoke_subagent(agent_file, task):
+    script_path = "/Users/lengweiping/.openclaw/workspace/skills/claude-code/scripts/claude-wrapper.sh"
+
+    # Read agent configuration
+    with open(agent_file, 'r') as f:
+        agent_config = f.read()
+
+    # Build command with proper escaping
+    cmd = [
+        script_path,
+        "task",
+        f"--agents", agent_config,
+        f"Use subagent to {task}"
+    ]
+
+    # Execute with TTY support
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        # Use script command for TTY simulation if needed
+        shell=True
+    )
+
+    return result.stdout, result.stderr
+```
+
+#### 3. Set Appropriate Budgets
+
+Control costs by setting budgets for subagent tasks:
+
+```bash
+# Budget-friendly subagent usage
+./scripts/claude-wrapper.sh task \
+  --agents "$(cat ~/.claude/agents/code-reviewer.md)" \
+  --max-budget-usd 2.00 \
+  --model haiku \
+  "Review src/utils/ for security issues"
+
+# Complex analysis with higher budget
+./scripts/claude-wrapper.sh task \
+  --agents "$(cat ~/.claude/agents/architecture-analyzer.md)" \
+  --max-budget-usd 10.00 \
+  --model sonnet \
+  "Analyze microservices architecture"
+```
+
+#### 4. Create Reusable Subagent Library
+
+Build a collection of subagents for your team:
+
+```bash
+# Create shared agents directory
+mkdir -p ~/claude-agents/team/
+
+# Create common subagents
+cat > ~/claude-agents/team/security-scanner.md << 'EOF'
+---
+name: security-scanner
+description: OWASP-focused security vulnerability scanner
+tools: Read, Grep, Glob, Bash
+model: sonnet
+permissionMode: plan
+---
+
+Scan code for security vulnerabilities focusing on:
+- SQL injection risks
+- XSS vulnerabilities
+- Authentication bypasses
+- Sensitive data exposure
+- Dependency vulnerabilities
+
+Provide severity ratings and remediation steps.
+EOF
+
+# Create usage script for team
+#!/bin/bash
+# team-security-scan.sh
+AGENT_PATH="$HOME/claude-agents/team/security-scanner.md"
+WRAPPER_PATH="/Users/lengweiping/.openclaw/workspace/skills/claude-code/scripts/claude-wrapper.sh"
+
+$WRAPPER_PATH task \
+  --agents "$(cat $AGENT_PATH)" \
+  --max-budget-usd 5.00 \
+  "Use security-scanner to audit $1"
+```
+
+#### 5. Chain Subagents for Complex Workflows
+
+Use multiple subagents in sequence:
+
+```bash
+#!/bin/bash
+# Complete code quality workflow
+
+WRAPPER="/Users/lengweiping/.openclaw/workspace/skills/claude-code/scripts/claude-wrapper.sh"
+
+# Step 1: Security scan
+$WRAPPER task \
+  --agents "$(cat ~/.claude/agents/security-scanner.md)" \
+  --max-budget-usd 3.00 \
+  "Scan src/ for vulnerabilities" > security-report.md
+
+# Step 2: Performance analysis
+$WRAPPER task \
+  --agents "$(cat ~/.claude/agents/performance-analyzer.md)" \
+  --max-budget-usd 5.00 \
+  "Analyze performance bottlenecks in src/" > performance-report.md
+
+# Step 3: Generate tests based on findings
+$WRAPPER task \
+  --agents "$(cat ~/.claude/agents/test-generator.md)" \
+  --max-budget-usd 4.00 \
+  "Create tests for issues found in security and performance reports"
+```
+
+#### 6. Monitor Subagent Performance
+
+Track subagent effectiveness:
+
+```bash
+# Create monitoring wrapper
+#!/bin/bash
+# monitored-subagent.sh
+
+START_TIME=$(date +%s)
+WRAPPER="/Users/lengweiping/.openclaw/workspace/skills/claude-code/scripts/claude-wrapper.sh"
+
+# Run subagent with output capture
+OUTPUT=$("$WRAPPER" task \
+  --agents "$(cat ~/.claude/agents/$1.md)" \
+  --verbose \
+  "${@:2}" 2>&1)
+
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
+# Log performance metrics
+echo "$(date): Subagent $1 completed in ${DURATION}s" >> subagent-performance.log
+echo "Task: $2" >> subagent-performance.log
+echo "---" >> subagent-performance.log
+
+# Output results
+echo "$OUTPUT"
+```
+
 ## References
 
 - [Claude Code Docs](https://code.claude.com/docs)

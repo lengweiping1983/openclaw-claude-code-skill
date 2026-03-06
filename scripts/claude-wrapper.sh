@@ -38,7 +38,8 @@ COMMANDS:
     session [name]          Resume or list sessions
     agents                  List and manage subagents
     auth                    Check authentication status
-    status                  Check if Claude Code is ready
+    status                  Check Claude Code installation status
+    config                  Show current configuration
     doctor                  Diagnose Claude Code installation
 
 OPTIONS FOR 'task' COMMAND:
@@ -67,6 +68,12 @@ EXAMPLES:
 
     # Resume session
     ./claude-wrapper.sh session my-feature
+
+    # Check status
+    ./claude-wrapper.sh status
+
+    # Show configuration
+    ./claude-wrapper.sh config
 
 ENVIRONMENT VARIABLES:
     CLAUDE_CODE_TIMEOUT     Default timeout in seconds (default: 300)
@@ -125,7 +132,8 @@ check_claude() {
 
 # Check Claude Code status
 check_status() {
-    echo -e "${BLUE}Checking Claude Code status...${NC}"
+    echo -e "${BLUE}=== Claude Code Status Check ===${NC}"
+    echo
 
     # Check if installed
     if ! command -v claude &> /dev/null; then
@@ -144,17 +152,23 @@ check_status() {
     fi
 
     # Check authentication
-    echo -e "${BLUE}Checking authentication...${NC}"
+    echo
+    echo -e "${BLUE}Authentication Status:${NC}"
     if claude auth status &> /dev/null; then
         echo -e "${GREEN}✓ Authenticated with Claude Code${NC}"
+        # Try to get more auth details
+        local auth_output=$(claude auth status 2>&1)
+        if [[ "$auth_output" =~ "Logged in as" ]]; then
+            echo -e "  $auth_output"
+        fi
     else
         echo -e "${RED}✗ Not authenticated with Claude Code${NC}"
         echo "  Run: claude auth login"
-        return 1
     fi
 
-    # Check TTY availability
-    echo -e "${BLUE}Checking environment...${NC}"
+    # Check environment
+    echo
+    echo -e "${BLUE}Environment Check:${NC}"
     if [ -t 0 ] && [ -t 1 ]; then
         echo -e "${GREEN}✓ TTY environment available${NC}"
     else
@@ -163,13 +177,108 @@ check_status() {
     fi
 
     # Check for required tools
+    local missing_tools=()
+
+    # Check for 'script' command
     if command -v script &> /dev/null; then
         echo -e "${GREEN}✓ 'script' command available${NC}"
     else
         echo -e "${YELLOW}! 'script' command not found${NC}"
+        missing_tools+=("script")
+    fi
+
+    # Check for timeout commands
+    if command -v gtimeout &> /dev/null || command -v timeout &> /dev/null; then
+        echo -e "${GREEN}✓ Timeout command available${NC}"
+    else
+        echo -e "${YELLOW}! No timeout command found (gtimeout/timeout)${NC}"
+    fi
+
+    # Check Claude Code configuration
+    echo
+    echo -e "${BLUE}Configuration:${NC}"
+    local config_dir="$HOME/.config/claude"
+    if [[ -d "$config_dir" ]]; then
+        echo -e "${GREEN}✓ Config directory exists${NC}"
+        if [[ -f "$config_dir/config.json" ]]; then
+            echo -e "${GREEN}✓ Config file found${NC}"
+        else
+            echo -e "${YELLOW}! No config file found${NC}"
+        fi
+    else
+        echo -e "${YELLOW}! No config directory found${NC}"
+    fi
+
+    # Check environment variables
+    echo
+    echo -e "${BLUE}Environment Variables:${NC}"
+    local env_vars=("CLAUDE_CODE_TIMEOUT" "CLAUDE_CODE_BUDGET" "CLAUDE_CODE_MODEL" "ANTHROPIC_API_KEY")
+    for var in "${env_vars[@]}"; do
+        if [[ -n "${!var:-}" ]]; then
+            echo -e "${GREEN}✓ $var=${!var}${NC}"
+        else
+            echo -e "  $var: not set"
+        fi
+    done
+
+    # Check API connectivity (if authenticated)
+    if claude auth status &> /dev/null; then
+        echo
+        echo -e "${BLUE}API Connectivity Test:${NC}"
+        echo -e "Testing API connection..."
+        if claude -p "test connection" --max-budget-usd 0.01 &> /dev/null; then
+            echo -e "${GREEN}✓ API connection successful${NC}"
+        else
+            echo -e "${RED}✗ API connection failed${NC}"
+        fi
     fi
 
     return 0
+}
+
+# Show current configuration
+show_config() {
+    echo -e "${BLUE}=== Claude Code Configuration ===${NC}"
+    echo
+
+    # Show default values
+    echo -e "${BLUE}Default Settings:${NC}"
+    echo -e "  Timeout: ${CLAUDE_CODE_TIMEOUT:-300} seconds"
+    echo -e "  Budget: $${CLAUDE_CODE_BUDGET:-10.00} USD"
+    echo -e "  Model: ${CLAUDE_CODE_MODEL:-sonnet}"
+    echo
+
+    # Show environment variables
+    echo -e "${BLUE}Environment Variables:${NC}"
+    local env_vars=("CLAUDE_CODE_TIMEOUT" "CLAUDE_CODE_BUDGET" "CLAUDE_CODE_MODEL" "ANTHROPIC_API_KEY" "FORCE_COLOR" "CLAUDE_CODE_DISABLE_TELEMETRY")
+    for var in "${env_vars[@]}"; do
+        if [[ -n "${!var:-}" ]]; then
+            echo -e "  $var=${!var}"
+        else
+            echo -e "  $var: (not set)"
+        fi
+    done
+    echo
+
+    # Show Claude Code config if available
+    local config_file="$HOME/.config/claude/config.json"
+    if [[ -f "$config_file" ]]; then
+        echo -e "${BLUE}Claude Code Config File ($config_file):${NC}"
+        if command -v jq &> /dev/null; then
+            jq . "$config_file" 2>/dev/null || cat "$config_file"
+        else
+            cat "$config_file"
+        fi
+    else
+        echo -e "${YELLOW}No Claude Code config file found${NC}"
+    fi
+    echo
+
+    # Show available models
+    echo -e "${BLUE}Available Models:${NC}"
+    echo -e "  - sonnet (default): Balanced performance and speed"
+    echo -e "  - opus: Most capable, higher cost"
+    echo -e "  - haiku: Fastest, most cost-effective"
 }
 
 # Check if running in a TTY
@@ -200,17 +309,20 @@ execute_claude() {
     export CLAUDE_CODE_DISABLE_TELEMETRY=0
 
     # Execute with script command to ensure TTY if available
-    if command -v script &> /dev/null && [ -t 0 ]; then
+    if command -v script > /dev/null 2>&1 && [ -t 0 ]; then
         # Use script to ensure TTY
         echo -e "${BLUE}Using TTY wrapper for better compatibility...${NC}"
-        script -q /dev/null -c "claude $cmd $args" || {
+        if script -q /dev/null -c "claude $cmd $args"; then
+            return 0
+        else
             local exit_code=$?
-            if [[ $exit_code -ne 0 ]]; then
+            if [[ $exit_code -ne 0 ]] && [[ $exit_code -ne 130 ]]; then
+                # Don't retry on Ctrl+C (exit code 130)
                 echo -e "${YELLOW}Retrying without TTY wrapper...${NC}"
-                claude $cmd $args || return $?
+                claude $cmd $args
             fi
             return $exit_code
-        }
+        fi
     else
         # Direct execution
         echo -e "${BLUE}Executing directly (no TTY available)...${NC}"
@@ -308,36 +420,92 @@ build_task_command() {
     if [[ "$allow_write" == true ]]; then
         flags="$flags --allowedTools \"Read,Edit,Write,Bash,Glob,Grep\""
         echo -e "${BLUE}Running with write permissions enabled...${NC}"
+        echo -e "${YELLOW}Allowed tools: Read, Edit, Write, Bash, Glob, Grep${NC}"
     else
         flags="$flags --allowedTools \"Read,Bash(ls *),Bash(cat *),Grep,Glob\""
         echo -e "${BLUE}Running in read-only mode (use --write to allow file modifications)...${NC}"
+        echo -e "${YELLOW}Allowed tools: Read, Bash (ls/cat only), Grep, Glob${NC}"
     fi
 
     echo -e "${GREEN}Executing Claude Code task...${NC}"
     echo -e "${YELLOW}Prompt:${NC} $prompt"
     echo -e "${YELLOW}Budget:${NC} \$$budget | ${YELLOW}Model:${NC} $model | ${YELLOW}Timeout:${NC} ${timeout}s"
+    echo -e "${BLUE}Progress:${NC} Starting task execution..."
     echo ""
 
     # Execute with timeout
     local start_time=$(date +%s)
-    echo -e "${BLUE}Starting execution...${NC}"
+    local exit_code=0
 
-    # Execute command
+    # Show progress indicator
+    (
+        local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+        local i=0
+        while kill -0 $! 2>/dev/null; do
+            printf "\r${BLUE}Progress:${NC} %s Executing task..." "${spin:i++%${#spin}:1}"
+            sleep 0.1
+        done
+        printf "\r${BLUE}Progress:${NC} Task execution completed.\n"
+    ) &
+    local spinner_pid=$!
+
     if timeout_cmd "$timeout" bash -c "claude $cmd $flags \"$prompt\"" 2>&1; then
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
+        kill $spinner_pid 2>/dev/null
+        wait $spinner_pid 2>/dev/null
         echo ""
         echo -e "${GREEN}✓ Task completed successfully in ${duration}s${NC}"
         return 0
     else
-        local exit_code=$?
+        exit_code=$?
+        kill $spinner_pid 2>/dev/null
+        wait $spinner_pid 2>/dev/null
+        echo ""
         if [[ $exit_code -eq 124 ]] || [[ $exit_code -eq 137 ]]; then
             echo -e "${RED}✗ Error: Command timed out after ${timeout} seconds.${NC}"
         else
             echo -e "${RED}✗ Error: Command failed with exit code ${exit_code}${NC}"
+            # Check if it's a common error
+            if [[ $exit_code -eq 127 ]]; then
+                echo -e "${YELLOW}Hint: Command not found. Is Claude Code installed?${NC}"
+            elif [[ $exit_code -eq 126 ]]; then
+                echo -e "${YELLOW}Hint: Command not executable. Check permissions.${NC}"
+            fi
         fi
         return $exit_code
     fi
+}
+
+# Execute with error handling
+execute_with_retry() {
+    local cmd=("$@")
+    local max_retries=2
+    local retry_count=0
+
+    while [[ $retry_count -lt $max_retries ]]; do
+        if "${cmd[@]}"; then
+            return 0
+        else
+            local exit_code=$?
+            retry_count=$((retry_count + 1))
+            if [[ $retry_count -lt $max_retries ]]; then
+                echo -e "${YELLOW}Retrying... (attempt $((retry_count + 1))/${max_retries})${NC}"
+                sleep 1
+            else
+                return $exit_code
+            fi
+        fi
+    done
+}
+
+# Cleanup function
+cleanup() {
+    # Kill any background processes
+    jobs -p | xargs -r kill 2>/dev/null
+    wait
+}
+trap cleanup EXIT
 }
 
 # Execute with error handling
@@ -378,7 +546,9 @@ main() {
     local exit_code=0
     case "$command" in
         task)
-            build_task_command "$@"
+            if ! build_task_command "$@"; then
+                exit_code=$?
+            fi
             ;;
 
         interactive|i)
@@ -386,21 +556,27 @@ main() {
             echo -e "${YELLOW}Press Ctrl+D or type /exit to quit${NC}"
             echo -e "${BLUE}Initializing...${NC}"
             echo ""
-            execute_claude ""
+            if ! execute_claude ""; then
+                exit_code=$?
+            fi
             ;;
 
         review)
             local path="${1:-.}"
             echo -e "${GREEN}Reviewing $path...${NC}"
             echo -e "${BLUE}Analyzing code quality, bugs, and best practices...${NC}"
-            build_task_command --write --budget 5.00 "Review the code in $path for quality, bugs, and best practices. Provide specific, actionable feedback."
+            if ! build_task_command --write --budget 5.00 "Review the code in $path for quality, bugs, and best practices. Provide specific, actionable feedback."; then
+                exit_code=$?
+            fi
             ;;
 
         explain)
             local path="${1:-.}"
             echo -e "${GREEN}Explaining $path...${NC}"
             echo -e "${BLUE}Analyzing architecture and components...${NC}"
-            build_task_command "Explain the code in $path. Include architecture overview, key components, and how they interact."
+            if ! build_task_command "Explain the code in $path. Include architecture overview, key components, and how they interact."; then
+                exit_code=$?
+            fi
             ;;
 
         refactor)
@@ -411,30 +587,40 @@ main() {
                 exit 1
             fi
             echo -e "${GREEN}Refactoring: $prompt${NC}"
-            build_task_command --write --budget 10.00 "$prompt"
+            if ! build_task_command --write --budget 10.00 "$prompt"; then
+                exit_code=$?
+            fi
             ;;
 
         session|s)
             local name="$1"
             if [[ -z "$name" ]]; then
                 echo -e "${YELLOW}Available sessions:${NC}"
-                claude agents
+                if ! claude agents; then
+                    exit_code=$?
+                fi
                 echo ""
                 echo "To resume a session: ./claude-wrapper.sh session <name-or-id>"
             else
                 echo -e "${GREEN}Resuming session: $name${NC}"
-                execute_claude "-r \"$name\""
+                if ! execute_claude "-r \"$name\""; then
+                    exit_code=$?
+                fi
             fi
             ;;
 
         agents|a)
             echo -e "${GREEN}Managing subagents...${NC}"
-            claude agents
+            if ! claude agents; then
+                exit_code=$?
+            fi
             ;;
 
         auth)
             echo -e "${GREEN}Checking authentication...${NC}"
-            claude auth status
+            if ! claude auth status; then
+                exit_code=$?
+            fi
             ;;
 
         status)
@@ -443,7 +629,9 @@ main() {
 
         doctor)
             echo -e "${GREEN}Running diagnostics...${NC}"
-            claude /doctor
+            if ! claude /doctor; then
+                exit_code=$?
+            fi
             ;;
 
         help|--help|-h)
@@ -453,12 +641,20 @@ main() {
         *)
             echo -e "${RED}Unknown command: $command${NC}"
             show_help
-            exit 1
+            exit_code=1
             ;;
     esac
 
     exit $exit_code
 }
+
+# Cleanup function
+cleanup() {
+    # Kill any background processes
+    jobs -p | xargs -r kill 2>/dev/null
+    wait
+}
+trap cleanup EXIT
 
 # Run main function
 main "$@"
