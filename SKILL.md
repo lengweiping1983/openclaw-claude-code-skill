@@ -469,6 +469,114 @@ claude "/speckit.implement"
 - **Spec Kit produces maintainable code**: Structured approach yields cleaner architecture
 - **TTY issues are solvable**: `script` command is the key
 
+## 10. Real-World Case Study: X-Diary Project
+
+### Project Overview
+Built a complete X-style private diary web application using Claude Code + Spec Kit:
+- **Features**: Post input, infinite scroll timeline, mood tags, image upload, calendar, "On This Day" review
+- **Stack**: Vanilla HTML/CSS/JS, no frameworks, LocalStorage persistence
+- **Result**: 60KB codebase, GitHub Pages deployment
+
+### Problems Encountered & Solutions
+
+#### Problem 1: Spec Kit Interactive Commands Hang
+**Symptom**: `/speckit.constitution`, `/speckit.implement` hang waiting for user confirmation (Yes/No prompts)
+
+**Root Cause**: Spec Kit commands require interactive confirmation, but `claude -p` non-interactive mode + `script` wrapper still can't handle the prompts properly
+
+**Solution - Hybrid Approach**:
+```bash
+# Step 1: Initialize (works non-interactively)
+specify init . --ai claude --here
+
+# Step 2: Generate tasks (works with script wrapper)
+script -q /dev/null claude -p "/speckit.tasks"
+
+# Step 3: For interactive steps (constitution/specify/implement),
+# manually create files OR use yes pipe:
+yes | script -q /dev/null claude -p "/speckit.constitution ..."
+
+# Step 4: If implement fails, manually execute based on tasks.md
+```
+
+**Key Insight**: Spec Kit is great for planning, but full automation requires handling interactive prompts. Manual intervention is acceptable for critical steps.
+
+#### Problem 2: Process Interruption During Long Operations
+**Symptom**: `/speckit.implement` was terminated mid-execution (SIGTERM)
+
+**Root Cause**: Long-running processes may hit timeout limits or be interrupted by system
+
+**Solution**:
+1. Run implement in background with logging
+2. Monitor progress via log files
+3. If interrupted, manually complete remaining tasks
+4. Break large implementations into smaller chunks
+
+```bash
+# Background execution with logging
+script -q /dev/null claude -p "/speckit.implement" > /tmp/implement.log 2>&1 &
+
+# Monitor
+tail -f /tmp/implement.log
+```
+
+#### Problem 3: TTY Issues with Different Commands
+**Symptom**: Some commands work with `script`, others fail with "tcgetattr/ioctl: Operation not supported"
+
+**Solution Matrix**:
+| Command | Works With | Notes |
+|---------|-----------|-------|
+| `claude -p "task"` | `script -q /dev/null` | Basic tasks |
+| `claude` interactive | Direct terminal | Must have real TTY |
+| `specify init` | Direct | No wrapper needed |
+| `/speckit.*` | `script` + sometimes `yes` pipe | May need confirmation handling |
+
+### Successful Workflow Pattern
+
+For reliable Spec Kit + Claude Code execution from OpenClaw:
+
+```bash
+# 1. Initialize project
+specify init . --ai claude --here
+
+# 2. Create constitution manually or use yes pipe
+yes | script -q /dev/null claude -p "/speckit.constitution Your design principles"
+
+# 3. Create specification manually
+# (Write to .specify/specifications/project.md)
+
+# 4. Create plan manually  
+# (Write to .specify/plans/project.md)
+
+# 5. Generate tasks (usually works)
+script -q /dev/null claude -p "/speckit.tasks"
+
+# 6. For implement, try with yes pipe or do manually
+# Option A: Automated (may hang)
+yes | script -q /dev/null claude -p "/speckit.implement"
+
+# Option B: Manual (reliable)
+# Read tasks.md and implement each task yourself
+```
+
+### Lessons Learned
+
+1. **Hybrid approach is practical**: Use Spec Kit for structure/planning, manual implementation for reliability
+2. **Always commit after each phase**: `git add .specify/ && git commit -m "phase complete"`
+3. **Keep tasks.md as reference**: Even if implement fails, the task list is valuable
+4. **Budget for manual work**: Complex projects will need manual intervention
+5. **Script wrapper is essential but not universal**: Know when to use direct execution
+
+### Recommended Approach for Complex Projects
+
+1. **Use Spec Kit for**: Project structure, task generation, documentation
+2. **Use Claude Code direct for**: Coding tasks, file editing (with `--write` flag when available)
+3. **Use manual for**: Final integration, testing, deployment
+
+This hybrid workflow delivers the benefits of structured planning while maintaining reliability.
+
+---
+
 ## References
 
 - [Claude Code Docs](https://code.claude.com/docs)
