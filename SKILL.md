@@ -1189,8 +1189,901 @@ echo "---" >> subagent-performance.log
 echo "$OUTPUT"
 ```
 
+## Spec Kit Workflow Guide
+
+Spec Kit is a powerful tool for spec-driven development that integrates seamlessly with Claude Code. It enables you to create detailed specifications for your projects and leverage AI to generate implementation plans and execute them systematically.
+
+### What is Spec Kit
+
+Spec Kit is a CLI tool that implements **Spec-Driven Development** - a methodology where you:
+1. Define clear project specifications before implementation
+2. Generate structured implementation plans from specs
+3. Execute tasks systematically with AI assistance
+
+#### Benefits of Using Spec Kit with Claude Code
+
+- **Consistent Architecture**: Specifications ensure consistent design patterns
+- **Better Requirements**: Clear specs lead to better implementations
+- **Reusable Templates**: Create project templates for common patterns
+- **Team Alignment**: Specifications serve as documentation and contracts
+- **AI-Guided Implementation**: Claude Code follows your specs precisely
+
+### Installation and Setup
+
+#### Install specify-cli
+
+```bash
+# Install via npm
+npm install -g specify-cli
+
+# Or install locally
+npm install specify-cli
+
+# Verify installation
+specify --version
+```
+
+#### Initialize a Project with AI Integration
+
+```bash
+# Create new project with Claude integration
+specify init my-project --ai claude
+
+# Or in existing project
+specify init --ai claude
+
+# This creates:
+# - .spec/ directory with configuration
+# - spec.config.json
+# - Templates for constitutions, specs, and plans
+```
+
+### Complete Workflow Steps
+
+#### Step 1: Create Constitution (Design Principles)
+
+The constitution defines your project's design principles, coding standards, and architectural guidelines.
+
+```bash
+# Create constitution interactively
+specify create constitution
+
+# Or create from template
+specify create constitution --template web-app
+```
+
+**Example Constitution (`constitution.md`)**:
+```markdown
+---
+name: skeuomorphic-todo-constitution
+description: Design principles for skeuomorphic todo app
+version: 1.0.0
+---
+
+# Design Principles
+
+## Visual Design
+- **Skeuomorphic Style**: Realistic textures, shadows, and materials
+- **3D Elements**: Depth, lighting, and perspective
+- **Real-world Metaphors**: Paper, leather, wood textures
+- **Rich Color Palette**: Warm, natural colors with gradients
+
+## User Experience
+- **Tactile Feedback**: Visual responses to interactions
+- **Intuitive Controls**: Familiar real-world analogies
+- **Smooth Animations**: Realistic physics and transitions
+- **Accessibility**: WCAG 2.1 AA compliance
+
+## Technical Standards
+- **React 18+** with TypeScript
+- **CSS Modules** or **Styled Components**
+- **Responsive Design** (mobile-first)
+- **Performance**: < 3s load time, 60fps animations
+- **Browser Support**: Chrome, Firefox, Safari, Edge (latest 2 versions)
+
+## Code Quality
+- **TypeScript Strict Mode**: No implicit any
+- **ESLint + Prettier**: Consistent formatting
+- **Component Composition**: Small, reusable components
+- **Custom Hooks**: Extract and reuse stateful logic
+```
+
+#### Step 2: Create Specification (Features & Requirements)
+
+Specifications define what your project will do in detail.
+
+```bash
+# Create specification
+specify create spec
+
+# Link to constitution
+specify create spec --constitution constitution.md
+```
+
+**Example Specification (`spec.md`)**:
+```markdown
+---
+name: skeuomorphic-todo-spec
+description: Feature specification for skeuomorphic todo application
+constitution: constitution.md
+version: 1.0.0
+---
+
+# Skeuomorphic Todo Application
+
+## Core Features
+
+### 1. Task Management
+- **Create Tasks**: Add new todos with title, description, and due date
+- **Edit Tasks**: Modify task details inline
+- **Delete Tasks**: Remove tasks with confirmation
+- **Complete Tasks**: Mark as done with satisfying animation
+- **Priority Levels**: High, medium, low with visual indicators
+
+### 2. Visual Design
+- **Paper Texture Background**: Realistic notebook paper look
+- **Leather Header**: Rich leather texture with stitching
+- **3D Buttons**: Raised buttons with press-down animations
+- **Hand-drawn Icons**: Sketch-style icons for actions
+- **Realistic Shadows**: Dynamic shadows based on lighting
+
+### 3. User Interactions
+- **Drag & Drop**: Reorder tasks with physics
+- **Swipe Actions**: Mobile swipe to complete/delete
+- **Keyboard Shortcuts**: Power user shortcuts
+- **Voice Input**: Speech-to-text for quick task addition
+- **Haptic Feedback**: Vibration on mobile for actions
+
+### 4. Data Persistence
+- **Local Storage**: Tasks saved in browser
+- **Export/Import**: JSON backup and restore
+- **Sync Simulation**: Fake sync with loading states
+- **Offline Support**: Works without internet
+
+## Technical Requirements
+
+### Performance
+- Initial load: < 2 seconds
+- Task operations: < 100ms response
+- Animations: 60fps minimum
+- Bundle size: < 200KB gzipped
+
+### Accessibility
+- Screen reader support
+- Keyboard navigation
+- High contrast mode
+- Font size controls
+- VoiceOver compatibility
+
+## File Structure
+```
+src/
+  components/
+    TaskItem/
+      TaskItem.tsx
+      TaskItem.module.css
+    TaskList/
+      TaskList.tsx
+      TaskList.module.css
+  hooks/
+    useLocalStorage.ts
+    useDragDrop.ts
+  styles/
+    textures.css
+    animations.css
+  utils/
+    dateHelpers.ts
+    animationHelpers.ts
+```
+```
+
+#### Step 3: Create Implementation Plan (Tech Stack & Architecture)
+
+The implementation plan translates specs into technical tasks.
+
+```bash
+# Generate implementation plan
+specify create plan --spec spec.md
+
+# Review and edit plan
+specify edit plan
+```
+
+**Example Plan (`plan.md`)**:
+```markdown
+---
+name: skeuomorphic-todo-plan
+description: Implementation plan for skeuomorphic todo app
+spec: spec.md
+version: 1.0.0
+---
+
+# Implementation Plan
+
+## Phase 1: Project Setup
+1. **Initialize React TypeScript Project**
+   - Create with Create React App
+   - Configure TypeScript strict mode
+   - Set up folder structure
+
+2. **Configure Development Environment**
+   - Set up ESLint and Prettier
+   - Configure CSS modules
+   - Add texture assets
+
+## Phase 2: Core Components
+1. **Create Base Components**
+   - `App` component with leather header
+   - `TaskList` with paper texture
+   - `TaskItem` with 3D styling
+
+2. **Implement Task Operations**
+   - Add task functionality
+   - Edit task inline
+   - Delete with confirmation
+   - Mark complete animation
+
+## Phase 3: Advanced Features
+1. **Drag and Drop**
+   - Implement drag handles
+   - Add physics animations
+   - Save new order
+
+2. **Visual Polish**
+   - Add realistic shadows
+   - Implement press animations
+   - Create hand-drawn icons
+
+## Phase 4: Testing & Optimization
+1. **Performance Optimization**
+   - Optimize animations
+   - Lazy load components
+   - Minimize bundle size
+
+2. **Accessibility**
+   - Add ARIA labels
+   - Implement keyboard nav
+   - Test screen readers
+
+## Technology Stack
+- **Frontend**: React 18 + TypeScript
+- **Styling**: CSS Modules + CSS3 animations
+- **State**: React Context + useReducer
+- **Icons**: SVG with hand-drawn style
+- **Textures**: CSS gradients and filters
+```
+
+#### Step 4: Generate Tasks
+
+Convert the plan into actionable tasks for Claude Code.
+
+```bash
+# Generate tasks from plan
+specify generate tasks
+
+# Output to specific format
+specify generate tasks --format claude-code
+
+# Save to file
+specify generate tasks --output tasks.md
+```
+
+**Generated Tasks Structure**:
+```markdown
+# Implementation Tasks
+
+## Task 1: Project Setup
+- Create React TypeScript app
+- Configure strict TypeScript
+- Set up folder structure
+- Install dependencies
+
+## Task 2: Create Constitution Components
+- Build leather header component
+- Style with realistic texture
+- Add stitched border effect
+- Implement responsive design
+
+## Task 3: Implement Task List
+- Create paper texture background
+- Build task list container
+- Add subtle paper lines
+- Implement shadow effects
+
+## Task 4: Task Item Component
+- Design 3D task item
+- Add hover animations
+- Implement checkbox styling
+- Create delete button
+
+## Task 5: Task Operations
+- Implement add task form
+- Create inline edit mode
+- Add confirmation dialogs
+- Build complete animations
+
+## Task 6: Drag and Drop
+- Install drag-drop library
+- Implement drag handles
+- Add physics animations
+- Save order to state
+
+## Task 7: Visual Polish
+- Add realistic shadows
+- Create press animations
+- Design hand-drawn icons
+- Implement lighting effects
+
+## Task 8: State Management
+- Create task context
+- Implement useReducer
+- Add local storage sync
+- Handle edge cases
+
+## Task 9: Performance
+- Optimize animations
+- Add React.memo
+- Implement lazy loading
+- Minimize re-renders
+
+## Task 10: Accessibility
+- Add ARIA labels
+- Implement keyboard nav
+- Test with screen readers
+- Add focus management
+```
+
+#### Step 5: Execute Implementation
+
+Use Claude Code to implement each task systematically.
+
+```bash
+# Start Claude Code session
+claude
+
+# In the session, work through tasks
+# "Implement Task 1: Create React TypeScript project with the following requirements..."
+
+# Or use the wrapper script
+./scripts/claude-wrapper.sh task --write "Implement Task 1: Create React TypeScript project with strict mode enabled and set up the folder structure as defined in the spec"
+```
+
+### Practical Example: Skeuomorphic Todo Project
+
+Let's walk through a real example of creating a skeuomorphic todo application.
+
+#### 1. Project Initialization
+
+```bash
+# Create project directory
+mkdir skeuomorphic-todo
+cd skeuomorphic-todo
+
+# Initialize with Spec Kit
+specify init --ai claude
+
+# Project structure created:
+# .
+# ├── .spec/
+# │   ├── config.json
+# │   └── templates/
+# ├── constitution.md (template)
+# ├── spec.md (template)
+# └── plan.md (template)
+```
+
+#### 2. Create Constitution
+
+```bash
+# Edit constitution
+nano constitution.md
+
+# Add skeuomorphic design principles
+```
+
+#### 3. Define Specification
+
+```bash
+# Create detailed spec
+specify create spec --template web-app
+
+# Edit with todo-specific features
+nano spec.md
+```
+
+#### 4. Generate Implementation Plan
+
+```bash
+# Auto-generate plan from spec
+specify create plan --ai claude
+
+# Review and adjust
+specify review plan
+```
+
+#### 5. Generate Tasks and Execute
+
+```bash
+# Generate actionable tasks
+specify generate tasks --format claude-code > TASKS.md
+
+# Start implementation with Claude Code
+./scripts/claude-wrapper.sh task --write "Implement Phase 1: Create React TypeScript app with the structure defined in TASKS.md"
+```
+
+#### File Structure Created
+
+After running the Spec Kit workflow, you'll have:
+
+```
+skeuomorphic-todo/
+├── .spec/
+│   ├── config.json
+│   └── templates/
+├── public/
+│   ├── index.html
+│   └── textures/
+│       ├── paper-texture.jpg
+│       └── leather-texture.jpg
+├── src/
+│   ├── components/
+│   │   ├── App/
+│   │   │   ├── App.tsx
+│   │   │   └── App.module.css
+│   │   ├── TaskList/
+│   │   │   ├── TaskList.tsx
+│   │   │   └── TaskList.module.css
+│   │   └── TaskItem/
+│   │       ├── TaskItem.tsx
+│   │       └── TaskItem.module.css
+│   ├── hooks/
+│   │   ├── useLocalStorage.ts
+│   │   └── useDragDrop.ts
+│   ├── styles/
+│   │   ├── textures.css
+│   │   └── animations.css
+│   ├── utils/
+│   │   └── dateHelpers.ts
+│   └── index.tsx
+├── constitution.md
+├── spec.md
+├── plan.md
+├── TASKS.md
+└── package.json
+```
+
+#### Commands Used During Implementation
+
+```bash
+# Task 1: Setup
+./scripts/claude-wrapper.sh task --write "Create React TypeScript app with the name 'skeuomorphic-todo', enable strict TypeScript mode, and create the folder structure defined in the constitution"
+
+# Task 2: Header Component
+./scripts/claude-wrapper.sh task --write "Create a leather-textured header component with stitched border effects using CSS gradients and filters. Make it responsive and follow the skeuomorphic design principles from the constitution"
+
+# Task 3: Paper Texture Background
+./scripts/claude-wrapper.sh task --write "Implement paper texture background for the task list using CSS with subtle paper lines effect. Use CSS gradients to create realistic paper appearance"
+
+# Task 4: 3D Task Items
+./scripts/claude-wrapper.sh task --write "Create TaskItem component with 3D styling including realistic shadows, press-down animations on click, and hover effects. Use CSS transforms and transitions"
+
+# Task 5: Task Operations
+./scripts/claude-wrapper.sh task --write "Implement add, edit, delete, and complete task functionality with smooth animations. Use React hooks for state management"
+
+# Task 6: Drag and Drop
+./scripts/claude-wrapper.sh task --write "Add drag and drop functionality to reorder tasks using react-beautiful-dnd library. Include physics-based animations"
+
+# Task 7: Visual Polish
+./scripts/claude-wrapper.sh task --write "Add final visual polish including hand-drawn style SVG icons, improved shadows and lighting effects, and micro-interactions"
+
+# Task 8: Performance Optimization
+./scripts/claude-wrapper.sh task --write "Optimize performance by adding React.memo to components, implementing lazy loading, and reducing bundle size"
+
+# Task 9: Accessibility
+./scripts/claude-wrapper.sh task --write "Add comprehensive accessibility features including ARIA labels, keyboard navigation, screen reader support, and focus management"
+```
+
+### Best Practices
+
+#### Writing Effective Constitutions
+
+1. **Be Specific About Design Principles**
+   ```markdown
+   # Good: Specific
+   - **Typography**: Use system fonts with 1.5 line height for readability
+   - **Color Palette**: Primary #FF6B6B, Secondary #4ECDC4, Neutral #F7F7F7
+
+   # Avoid: Vague
+   - Make it look nice
+   - Use good colors
+   ```
+
+2. **Include Technical Constraints**
+   ```markdown
+   # Good: Concrete
+   - **Browser Support**: Chrome 90+, Firefox 88+, Safari 14+
+   - **Bundle Size**: < 150KB gzipped for initial load
+
+   # Avoid: Ambiguous
+   - Support modern browsers
+   - Keep it lightweight
+   ```
+
+3. **Define Measurable Standards**
+   ```markdown
+   # Good: Measurable
+   - **Performance**: LCP < 2.5s, FID < 100ms, CLS < 0.1
+   - **Accessibility**: WCAG 2.1 AA compliance, keyboard navigation
+   ```
+
+#### Creating Detailed Specifications
+
+1. **Break Down Features**
+   ```markdown
+   ## Feature: User Authentication
+
+   ### Requirements:
+   - Email/password login
+   - OAuth (Google, GitHub)
+   - Password reset via email
+   - Two-factor authentication
+
+   ### Acceptance Criteria:
+   - Users can register with email validation
+   - Password must be 8+ chars with special characters
+   - Session persists for 30 days
+   - Failed login shows generic error
+   ```
+
+2. **Include User Stories**
+   ```markdown
+   ## User Story: Task Creation
+
+   As a busy professional,
+   I want to quickly add tasks,
+   So that I don't forget important work.
+
+   ### Scenarios:
+   - Quick add with just title
+   - Detailed add with due date and notes
+   - Voice input on mobile
+   ```
+
+3. **Define Edge Cases**
+   ```markdown
+   ## Edge Cases:
+   - Network failure during sync
+   - Maximum task length (500 chars)
+   - Special characters in task names
+   - Browser storage quota exceeded
+   ```
+
+#### Managing the Workflow
+
+1. **Version Control Your Specs**
+   ```bash
+   # Track all spec files
+   git add constitution.md spec.md plan.md
+   git commit -m "Update specification with new features"
+
+   # Tag stable versions
+   git tag v1.0-spec
+   ```
+
+2. **Iterate on Specifications**
+   ```bash
+   # Review and update specs
+   specify review spec
+
+   # Update plan after spec changes
+   specify update plan
+
+   # Regenerate tasks
+   specify generate tasks --force
+   ```
+
+3. **Use Branching for Experiments**
+   ```bash
+   # Create feature branch
+   git checkout -b feature/advanced-animations
+
+   # Update spec for new feature
+   specify edit spec
+
+   # Generate new tasks
+   specify generate tasks
+   ```
+
+#### Tips for Successful Implementation
+
+1. **Start Small**
+   - Begin with MVP features
+   - Get core functionality working
+   - Add polish incrementally
+
+2. **Review Generated Tasks**
+   ```bash
+   # Always review before implementing
+   specify generate tasks > TASKS.md
+   nano TASKS.md  # Edit as needed
+   ```
+
+3. **Use Appropriate Models**
+   ```bash
+   # Quick tasks with Haiku
+   ./scripts/claude-wrapper.sh task --model haiku --write "Implement basic button component"
+
+   # Complex features with Sonnet
+   ./scripts/claude-wrapper.sh task --model sonnet --write "Implement drag and drop with physics"
+
+   # Architecture decisions with Opus
+   ./scripts/claude-wrapper.sh task --model opus --write "Design state management architecture"
+   ```
+
+4. **Set Realistic Budgets**
+   ```bash
+   # Simple component: $0.50
+   ./scripts/claude-wrapper.sh task --max-budget-usd 0.50 --write "Create button component"
+
+   # Complex feature: $5.00
+   ./scripts/claude-wrapper.sh task --max-budget-usd 5.00 --write "Implement authentication system"
+   ```
+
+### Troubleshooting
+
+#### Common Issues and Solutions
+
+1. **"Spec not found" Error**
+   ```bash
+   # Check current directory
+   pwd
+
+   # Initialize if needed
+   specify init --ai claude
+
+   # Verify spec files exist
+   ls *.md
+   ```
+
+2. **"Invalid constitution" Error**
+   ```bash
+   # Validate YAML frontmatter
+   # Ensure proper format:
+   ---
+   name: my-constitution
+   description: My project principles
+   version: 1.0.0
+   ---
+   ```
+
+3. **Tasks Not Generating**
+   ```bash
+   # Check spec completeness
+   specify validate spec
+
+   # Ensure plan exists
+   specify create plan --force
+
+   # Try verbose output
+   specify generate tasks --verbose
+   ```
+
+4. **Claude Code Integration Issues**
+   ```bash
+   # Use wrapper script
+   ./scripts/claude-wrapper.sh task --write "Your task here"
+
+   # Check TTY issues
+   # See TTY/PTY section in main documentation
+   ```
+
+#### How to Iterate on Specs
+
+1. **Incremental Updates**
+   ```bash
+   # Small changes to spec
+   specify edit spec
+
+   # Update only affected tasks
+   specify update tasks --incremental
+   ```
+
+2. **Major Refactoring**
+   ```bash
+   # Backup current spec
+   cp spec.md spec.md.backup
+
+   # Make major changes
+   nano spec.md
+
+   # Regenerate everything
+   specify create plan --force
+   specify generate tasks --force
+   ```
+
+3. **A/B Testing Approaches**
+   ```bash
+   # Create variant specs
+   cp spec.md spec-variant-a.md
+   cp spec.md spec-variant-b.md
+
+   # Generate tasks for each
+   specify generate tasks --spec spec-variant-a.md > tasks-a.md
+   specify generate tasks --spec spec-variant-b.md > tasks-b.md
+
+   # Implement and compare
+   ```
+
+4. **Collaborative Editing**
+   ```bash
+   # Share spec for review
+   specify export spec --format pdf > spec-review.pdf
+
+   # Merge feedback
+   specify merge spec --input feedback.md
+   ```
+
 ## References
 
 - [Claude Code Docs](https://code.claude.com/docs)
 - [Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview)
 - [MCP Documentation](https://code.claude.com/docs/en/mcp)
+
+## Spec Kit Workflow Guide
+
+Spec Kit is a toolkit for Spec-Driven Development that works seamlessly with Claude Code. It helps you build high-quality software by making specifications executable.
+
+### What is Spec-Driven Development?
+
+Spec-Driven Development flips traditional development on its head. Instead of writing code first, you:
+1. Define principles and standards (Constitution)
+2. Specify what you want to build (Specification)
+3. Plan the implementation (Implementation Plan)
+4. Generate actionable tasks
+5. Execute with AI assistance
+
+### Installation
+
+```bash
+# Install specify-cli
+uv tool install specify-cli --from git+https://github.com/github/spec-kit.git
+
+# Verify installation
+specify check
+```
+
+### Setting Up a Project with Claude Code
+
+```bash
+# Create new project
+specify init my-project --ai claude
+
+# Or initialize in current directory
+specify init . --ai claude --here
+```
+
+### The Complete Workflow
+
+#### Step 1: Establish Constitution
+
+Create `.specify/constitution.md` with your design principles:
+
+```markdown
+# Project Constitution
+
+## Design Principles
+- Visual hierarchy and consistency
+- Mobile-first responsive design
+- Performance optimization
+
+## Code Standards
+- Semantic HTML5
+- BEM CSS methodology
+- ES6+ JavaScript
+```
+
+Use in Claude Code:
+```bash
+claude "/speckit.constitution Create principles for a modern web app"
+```
+
+#### Step 2: Create Specification
+
+Define what to build in `.specify/specifications/`:
+
+```bash
+claude "/speckit.specify Build a task management app with categories, 
+priorities, and due dates. Include drag-and-drop functionality."
+```
+
+#### Step 3: Create Implementation Plan
+
+Define technical approach:
+
+```bash
+claude "/speckit.plan Use React with TypeScript, Tailwind CSS for styling,
+and localStorage for persistence."
+```
+
+#### Step 4: Generate Tasks
+
+Break down into actionable items:
+
+```bash
+claude "/speckit.tasks"
+```
+
+#### Step 5: Execute Implementation
+
+Implement all tasks:
+
+```bash
+claude "/speckit.implement"
+```
+
+### Real-World Example: Skeuomorphic Todo App
+
+Here's a complete example:
+
+**Project Structure Created:**
+```
+skeuomorphic-todo/
+├── .specify/
+│   ├── constitution.md      # Design principles
+│   └── specifications/
+│       ├── todo-app.md      # Feature specs
+│       └── implementation-plan.md
+├── index.html
+├── css/style.css           # 14KB of skeuomorphic styles
+└── js/app.js              # Full functionality
+```
+
+**Commands Used:**
+```bash
+# Initialize
+specify init . --ai claude --here
+
+# Create constitution with design principles
+claude "/speckit.constitution Define skeuomorphic design with leather textures,
+realistic shadows, and 3D button effects"
+
+# Specify features
+claude "/speckit.specify Create a todo app with leather-bound notebook UI,
+paper texture for tasks, realistic checkbox animations, and localStorage"
+
+# Plan implementation
+claude "/speckit.plan Use vanilla HTML/CSS/JS with advanced CSS gradients
+for textures, no external libraries"
+
+# Generate and implement
+claude "/speckit.tasks"
+claude "/speckit.implement"
+```
+
+### Best Practices
+
+1. **Detailed Constitutions**: The more specific your principles, the better the output
+2. **Clear Specifications**: Focus on 'what' and 'why', not 'how'
+3. **Iterative Refinement**: Use /speckit.clarify to refine unclear specs
+4. **Version Control**: Commit after each major step
+5. **Review Tasks**: Always review generated tasks before implementing
+
+### Tips for Success
+
+- Start with a clear vision
+- Be specific in specifications
+- Use examples in your constitution
+- Don't skip the planning step
+- Review and iterate on specs
+
+### Common Commands Reference
+
+| Command | Purpose |
+|---------|---------|
+| `/speckit.constitution` | Define project principles |
+| `/speckit.specify` | Create feature specification |
+| `/speckit.plan` | Technical implementation plan |
+| `/speckit.tasks` | Generate actionable tasks |
+| `/speckit.implement` | Execute all tasks |
+| `/speckit.clarify` | Refine unclear specifications |
+
