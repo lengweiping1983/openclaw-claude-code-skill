@@ -469,111 +469,175 @@ claude "/speckit.implement"
 - **Spec Kit produces maintainable code**: Structured approach yields cleaner architecture
 - **TTY issues are solvable**: `script` command is the key
 
-## 10. Real-World Case Study: X-Diary Project
+## 10. Spec Kit + OpenClaw Integration Patterns
 
-### Project Overview
-Built a complete X-style private diary web application using Claude Code + Spec Kit:
-- **Features**: Post input, infinite scroll timeline, mood tags, image upload, calendar, "On This Day" review
-- **Stack**: Vanilla HTML/CSS/JS, no frameworks, LocalStorage persistence
-- **Result**: 60KB codebase, GitHub Pages deployment
+### The Challenge
+When using Spec Kit with Claude Code from OpenClaw (non-interactive environment), several integration issues arise due to TTY requirements and interactive prompts.
 
-### Problems Encountered & Solutions
+### Command Compatibility Matrix
 
-#### Problem 1: Spec Kit Interactive Commands Hang
-**Symptom**: `/speckit.constitution`, `/speckit.implement` hang waiting for user confirmation (Yes/No prompts)
+| Command | Execution Method | Interactive Prompts | Reliability |
+|---------|------------------|---------------------|-------------|
+| `specify init` | Direct | No | ✅ High |
+| `/speckit.constitution` | `script` wrapper + `yes` pipe | Yes | ⚠️ Medium |
+| `/speckit.specify` | `script` wrapper + `yes` pipe | Yes | ⚠️ Medium |
+| `/speckit.plan` | `script` wrapper + `yes` pipe | Yes | ⚠️ Medium |
+| `/speckit.tasks` | `script` wrapper | No | ✅ High |
+| `/speckit.implement` | `script` wrapper + `yes` pipe | Yes | ⚠️ Medium |
+| Direct coding tasks | `script` wrapper | No | ✅ High |
 
-**Root Cause**: Spec Kit commands require interactive confirmation, but `claude -p` non-interactive mode + `script` wrapper still can't handle the prompts properly
+### Hybrid Workflow (Recommended)
 
-**Solution - Hybrid Approach**:
+For production use from OpenClaw, combine automation with manual steps:
+
+#### Phase 1: Automated Setup
 ```bash
-# Step 1: Initialize (works non-interactively)
+# Initialize project structure (always works)
 specify init . --ai claude --here
 
-# Step 2: Generate tasks (works with script wrapper)
-script -q /dev/null claude -p "/speckit.tasks"
-
-# Step 3: For interactive steps (constitution/specify/implement),
-# manually create files OR use yes pipe:
-yes | script -q /dev/null claude -p "/speckit.constitution ..."
-
-# Step 4: If implement fails, manually execute based on tasks.md
+# Generate task list (reliable)
+script -q /dev/null claude -p --max-budget-usd 5 \
+  "/speckit.tasks"
 ```
 
-**Key Insight**: Spec Kit is great for planning, but full automation requires handling interactive prompts. Manual intervention is acceptable for critical steps.
+#### Phase 2: Semi-Automated Planning
+```bash
+# For commands with confirmation prompts, use yes pipe
+yes | script -q /dev/null claude -p --max-budget-usd 3 \
+  "/speckit.constitution Define your design principles here"
 
-#### Problem 2: Process Interruption During Long Operations
-**Symptom**: `/speckit.implement` was terminated mid-execution (SIGTERM)
+# Alternative: Create files manually following Spec Kit format
+# .specify/memory/constitution.md
+# .specify/specifications/project.md
+# .specify/plans/project.md
+```
 
-**Root Cause**: Long-running processes may hit timeout limits or be interrupted by system
+#### Phase 3: Implementation Strategy
 
-**Solution**:
-1. Run implement in background with logging
-2. Monitor progress via log files
-3. If interrupted, manually complete remaining tasks
-4. Break large implementations into smaller chunks
+**Option A: Automated (try first)**
+```bash
+# Run implement with logging for monitoring
+yes | script -q /dev/null claude -p --max-budget-usd 15 \
+  "/speckit.implement" 2>&1 | tee /tmp/implement.log
+```
+
+**Option B: Manual (fallback)**
+If automated implement fails or hangs:
+1. Read generated `tasks.md`
+2. Execute tasks using direct Claude Code commands
+3. Or implement manually following task structure
 
 ```bash
-# Background execution with logging
-script -q /dev/null claude -p "/speckit.implement" > /tmp/implement.log 2>&1 &
+# Example: Implement specific tasks
+cd /projects/new-app
 
-# Monitor
+# Task 1: Create HTML structure
+script -q /dev/null claude -p --max-budget-usd 2 \
+  "Create index.html with semantic HTML5 structure for [project]"
+
+# Task 2: Create CSS
+script -q /dev/null claude -p --max-budget-usd 3 \
+  "Create css/style.css with [design system]"
+
+# Continue with remaining tasks...
+```
+
+### Common Issues and Solutions
+
+#### Issue 1: Confirmation Prompts Hang
+**Symptom**: Commands like `/speckit.constitution` wait for Yes/No input indefinitely
+
+**Solution**: Use `yes` command to auto-confirm
+```bash
+yes | script -q /dev/null claude -p "/speckit.constitution ..."
+```
+
+#### Issue 2: TTY Errors
+**Symptom**: `tcgetattr/ioctl: Operation not supported`
+
+**Solution**: Some commands work without `script` wrapper
+```bash
+# Try without wrapper first
+claude -p "simple task"
+
+# If fails, use wrapper
+script -q /dev/null claude -p "simple task"
+```
+
+#### Issue 3: Long-Running Process Termination
+**Symptom**: `/speckit.implement` killed mid-execution
+
+**Solutions**:
+1. Use background execution with logging
+2. Break into smaller implement batches
+3. Switch to manual implementation
+
+```bash
+# Background with monitoring
+script -q /dev/null claude -p "/speckit.implement" > /tmp/implement.log 2>&1 &
 tail -f /tmp/implement.log
 ```
 
-#### Problem 3: TTY Issues with Different Commands
-**Symptom**: Some commands work with `script`, others fail with "tcgetattr/ioctl: Operation not supported"
+#### Issue 4: File Creation Failures
+**Symptom**: Claude Code runs but no files created
 
-**Solution Matrix**:
-| Command | Works With | Notes |
-|---------|-----------|-------|
-| `claude -p "task"` | `script -q /dev/null` | Basic tasks |
-| `claude` interactive | Direct terminal | Must have real TTY |
-| `specify init` | Direct | No wrapper needed |
-| `/speckit.*` | `script` + sometimes `yes` pipe | May need confirmation handling |
-
-### Successful Workflow Pattern
-
-For reliable Spec Kit + Claude Code execution from OpenClaw:
+**Checklist**:
+1. Verify `--allowedTools` includes `Write`
+2. Check TTY with `script` wrapper
+3. Ensure sufficient budget with `--max-budget-usd`
+4. Try more specific prompts
 
 ```bash
-# 1. Initialize project
-specify init . --ai claude --here
-
-# 2. Create constitution manually or use yes pipe
-yes | script -q /dev/null claude -p "/speckit.constitution Your design principles"
-
-# 3. Create specification manually
-# (Write to .specify/specifications/project.md)
-
-# 4. Create plan manually  
-# (Write to .specify/plans/project.md)
-
-# 5. Generate tasks (usually works)
-script -q /dev/null claude -p "/speckit.tasks"
-
-# 6. For implement, try with yes pipe or do manually
-# Option A: Automated (may hang)
-yes | script -q /dev/null claude -p "/speckit.implement"
-
-# Option B: Manual (reliable)
-# Read tasks.md and implement each task yourself
+# Working pattern for file creation
+script -q /dev/null claude -p \
+  --allowedTools "Read,Edit,Write" \
+  --max-budget-usd 5 \
+  "Create file.html with [specific content]. Save to /path/to/file.html"
 ```
 
-### Lessons Learned
+### Best Practices for OpenClaw Integration
 
-1. **Hybrid approach is practical**: Use Spec Kit for structure/planning, manual implementation for reliability
-2. **Always commit after each phase**: `git add .specify/ && git commit -m "phase complete"`
-3. **Keep tasks.md as reference**: Even if implement fails, the task list is valuable
-4. **Budget for manual work**: Complex projects will need manual intervention
-5. **Script wrapper is essential but not universal**: Know when to use direct execution
+1. **Always use `--max-budget-usd`** to prevent runaway costs
+2. **Generate tasks first** - even if implement fails, tasks.md is valuable
+3. **Commit after each phase**:
+   ```bash
+   git add .specify/ && git commit -m "Phase: [constitution|spec|plan|tasks]"
+   ```
+4. **Have a fallback plan** - be ready to implement manually if automation fails
+5. **Use specific prompts** - vague prompts cause more clarification loops
+6. **Monitor long processes** - use `tee` or redirection to track progress
 
-### Recommended Approach for Complex Projects
+### Example: Complete Workflow
 
-1. **Use Spec Kit for**: Project structure, task generation, documentation
-2. **Use Claude Code direct for**: Coding tasks, file editing (with `--write` flag when available)
-3. **Use manual for**: Final integration, testing, deployment
+```bash
+# Step 1: Setup
+specify init . --ai claude --here
+git add . && git commit -m "Init Spec Kit project"
 
-This hybrid workflow delivers the benefits of structured planning while maintaining reliability.
+# Step 2: Generate tasks (reliable)
+script -q /dev/null claude -p --max-budget-usd 5 "/speckit.tasks"
+git add . && git commit -m "Generate tasks"
+
+# Step 3: Try automated implement
+timeout 300 script -q /dev/null claude -p --max-budget-usd 15 \
+  "/speckit.implement" && \
+  git add . && git commit -m "Implement via Claude Code" || \
+  echo "Implement failed or timed out, switch to manual"
+
+# Step 4: If needed, implement remaining tasks manually
+# Read tasks.md and complete each task
+```
+
+### When to Use Which Approach
+
+| Scenario | Recommended Approach |
+|----------|---------------------|
+| Simple landing page | Direct `claude -p` with `script` |
+| Single component | Direct `claude -p` with `script` |
+| Complex multi-file app | Spec Kit for planning + manual implement |
+| Team project | Spec Kit full workflow (interactive terminal) |
+| Rapid prototype | Skip Spec Kit, direct coding |
+| Production code | Spec Kit planning + careful implementation |
 
 ---
 
