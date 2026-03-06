@@ -3,7 +3,10 @@
 # Handles TTY/PTY requirements for non-interactive environments
 # Usage: ./claude-wrapper.sh [command] [options]
 
-set -e
+set -euo pipefail
+
+# Error handling
+trap 'echo -e "${RED}Error occurred in script at line $LINENO${NC}"; exit 1' ERR
 
 # Colors for output
 RED='\033[0;31m'
@@ -35,6 +38,7 @@ COMMANDS:
     session [name]          Resume or list sessions
     agents                  List and manage subagents
     auth                    Check authentication status
+    status                  Check if Claude Code is ready
     doctor                  Diagnose Claude Code installation
 
 OPTIONS FOR 'task' COMMAND:
@@ -72,6 +76,44 @@ ENVIRONMENT VARIABLES:
 EOF
 }
 
+# macOS-compatible timeout function
+timeout_cmd() {
+    local timeout_seconds=$1
+    shift
+
+    if command -v gtimeout &> /dev/null; then
+        # GNU timeout from coreutils
+        gtimeout "$timeout_seconds" "$@"
+    elif command -v timeout &> /dev/null; then
+        # Linux timeout
+        timeout "$timeout_seconds" "$@"
+    else
+        # Fallback implementation for macOS
+        local cmd_pid
+        "$@" &
+        cmd_pid=$!
+
+        (
+            sleep "$timeout_seconds"
+            kill -TERM "$cmd_pid" 2>/dev/null
+            sleep 1
+            kill -KILL "$cmd_pid" 2>/dev/null
+        ) &
+        local sleeper_pid=$!
+
+        if wait "$cmd_pid"; then
+            kill "$sleeper_pid" 2>/dev/null
+            wait "$sleeper_pid" 2>/dev/null
+            return 0
+        else
+            local exit_code=$?
+            kill "$sleeper_pid" 2>/dev/null
+            wait "$sleeper_pid" 2>/dev/null
+            return $exit_code
+        fi
+    fi
+}
+
 # Check if Claude Code is installed
 check_claude() {
     if ! command -v claude &> /dev/null; then
@@ -79,13 +121,55 @@ check_claude() {
         echo "Install with: curl -fsSL https://claude.ai/install.sh | bash"
         exit 1
     fi
+}
+
+# Check Claude Code status
+check_status() {
+    echo -e "${BLUE}Checking Claude Code status...${NC}"
+
+    # Check if installed
+    if ! command -v claude &> /dev/null; then
+        echo -e "${RED}✗ Claude Code is not installed${NC}"
+        echo "  Install with: curl -fsSL https://claude.ai/install.sh | bash"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Claude Code is installed${NC}"
+
+    # Check version
+    local version
+    if version=$(claude --version 2>/dev/null); then
+        echo -e "${GREEN}✓ Version: $version${NC}"
+    else
+        echo -e "${YELLOW}! Unable to determine version${NC}"
+    fi
 
     # Check authentication
-    if ! claude auth status &> /dev/null; then
-        echo -e "${RED}Error: Not authenticated with Claude Code.${NC}"
-        echo "Run: claude auth login"
-        exit 1
+    echo -e "${BLUE}Checking authentication...${NC}"
+    if claude auth status &> /dev/null; then
+        echo -e "${GREEN}✓ Authenticated with Claude Code${NC}"
+    else
+        echo -e "${RED}✗ Not authenticated with Claude Code${NC}"
+        echo "  Run: claude auth login"
+        return 1
     fi
+
+    # Check TTY availability
+    echo -e "${BLUE}Checking environment...${NC}"
+    if [ -t 0 ] && [ -t 1 ]; then
+        echo -e "${GREEN}✓ TTY environment available${NC}"
+    else
+        echo -e "${YELLOW}! Not running in a TTY environment${NC}"
+        echo "  Consider running directly in terminal for best experience"
+    fi
+
+    # Check for required tools
+    if command -v script &> /dev/null; then
+        echo -e "${GREEN}✓ 'script' command available${NC}"
+    else
+        echo -e "${YELLOW}! 'script' command not found${NC}"
+    fi
+
+    return 0
 }
 
 # Check if running in a TTY
@@ -95,6 +179,13 @@ check_tty() {
         echo "Claude Code works best in an interactive terminal."
         echo "Consider running this command directly in your terminal."
         echo ""
+
+        # Check if we can use script command
+        if ! command -v script > /dev/null 2>&1; then
+            echo -e "${YELLOW}Warning: 'script' command not found.${NC}"
+            echo "Install with: brew install util-linux (macOS) or apt-get install bsdutils (Linux)"
+            echo ""
+        fi
     fi
 }
 
@@ -111,9 +202,18 @@ execute_claude() {
     # Execute with script command to ensure TTY if available
     if command -v script &> /dev/null && [ -t 0 ]; then
         # Use script to ensure TTY
-        script -q /dev/null -c "claude $cmd $args"
+        echo -e "${BLUE}Using TTY wrapper for better compatibility...${NC}"
+        script -q /dev/null -c "claude $cmd $args" || {
+            local exit_code=$?
+            if [[ $exit_code -ne 0 ]]; then
+                echo -e "${YELLOW}Retrying without TTY wrapper...${NC}"
+                claude $cmd $args || return $?
+            fi
+            return $exit_code
+        }
     else
         # Direct execution
+        echo -e "${BLUE}Executing directly (no TTY available)...${NC}"
         claude $cmd $args
     fi
 }
@@ -136,10 +236,22 @@ build_task_command() {
                 shift
                 ;;
             --budget)
+                if [[ -z "$2" ]] || [[ "$2" =~ ^-- ]]; then
+                    echo -e "${RED}Error: --budget requires a value${NC}"
+                    exit 1
+                fi
+                if ! [[ "$2" =~ ^[0-9]+("."[0-9]+)?$ ]]; then
+                    echo -e "${RED}Error: Budget must be a number${NC}"
+                    exit 1
+                fi
                 budget="$2"
                 shift 2
                 ;;
             --model)
+                if [[ -z "$2" ]] || [[ "$2" =~ ^-- ]]; then
+                    echo -e "${RED}Error: --model requires a value${NC}"
+                    exit 1
+                fi
                 model="$2"
                 shift 2
                 ;;
@@ -148,10 +260,22 @@ build_task_command() {
                 shift
                 ;;
             --output)
+                if [[ -z "$2" ]] || [[ "$2" =~ ^-- ]]; then
+                    echo -e "${RED}Error: --output requires a value${NC}"
+                    exit 1
+                fi
                 output="$2"
                 shift 2
                 ;;
             --timeout)
+                if [[ -z "$2" ]] || [[ "$2" =~ ^-- ]]; then
+                    echo -e "${RED}Error: --timeout requires a value${NC}"
+                    exit 1
+                fi
+                if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                    echo -e "${RED}Error: Timeout must be a number (seconds)${NC}"
+                    exit 1
+                fi
                 timeout="$2"
                 shift 2
                 ;;
@@ -195,23 +319,63 @@ build_task_command() {
     echo ""
 
     # Execute with timeout
-    timeout "$timeout" bash -c "claude $cmd $flags \"$prompt\"" || {
+    local start_time=$(date +%s)
+    echo -e "${BLUE}Starting execution...${NC}"
+
+    # Execute command
+    if timeout_cmd "$timeout" bash -c "claude $cmd $flags \"$prompt\"" 2>&1; then
+        local end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        echo ""
+        echo -e "${GREEN}✓ Task completed successfully in ${duration}s${NC}"
+        return 0
+    else
         local exit_code=$?
-        if [[ $exit_code -eq 124 ]]; then
-            echo -e "${RED}Error: Command timed out after ${timeout} seconds.${NC}"
+        if [[ $exit_code -eq 124 ]] || [[ $exit_code -eq 137 ]]; then
+            echo -e "${RED}✗ Error: Command timed out after ${timeout} seconds.${NC}"
+        else
+            echo -e "${RED}✗ Error: Command failed with exit code ${exit_code}${NC}"
         fi
         return $exit_code
-    }
+    fi
+}
+
+# Execute with error handling
+execute_with_retry() {
+    local cmd=("$@")
+    local max_retries=2
+    local retry_count=0
+
+    while [[ $retry_count -lt $max_retries ]]; do
+        if "${cmd[@]}"; then
+            return 0
+        else
+            local exit_code=$?
+            retry_count=$((retry_count + 1))
+            if [[ $retry_count -lt $max_retries ]]; then
+                echo -e "${YELLOW}Retrying... (attempt $((retry_count + 1))/${max_retries})${NC}"
+                sleep 1
+            else
+                return $exit_code
+            fi
+        fi
+    done
+}
 }
 
 # Main command handler
 main() {
-    check_claude
-    check_tty
+    # Don't check Claude for status/help commands
+    if [[ "$1" != "status" ]] && [[ "$1" != "help" ]] && [[ "$1" != "--help" ]] && [[ "$1" != "-h" ]]; then
+        check_claude
+        check_tty
+    fi
 
     local command="${1:-help}"
     shift || true
 
+    # Handle errors gracefully
+    local exit_code=0
     case "$command" in
         task)
             build_task_command "$@"
@@ -220,6 +384,7 @@ main() {
         interactive|i)
             echo -e "${GREEN}Starting interactive Claude Code session...${NC}"
             echo -e "${YELLOW}Press Ctrl+D or type /exit to quit${NC}"
+            echo -e "${BLUE}Initializing...${NC}"
             echo ""
             execute_claude ""
             ;;
@@ -227,12 +392,14 @@ main() {
         review)
             local path="${1:-.}"
             echo -e "${GREEN}Reviewing $path...${NC}"
+            echo -e "${BLUE}Analyzing code quality, bugs, and best practices...${NC}"
             build_task_command --write --budget 5.00 "Review the code in $path for quality, bugs, and best practices. Provide specific, actionable feedback."
             ;;
 
         explain)
             local path="${1:-.}"
             echo -e "${GREEN}Explaining $path...${NC}"
+            echo -e "${BLUE}Analyzing architecture and components...${NC}"
             build_task_command "Explain the code in $path. Include architecture overview, key components, and how they interact."
             ;;
 
@@ -270,6 +437,10 @@ main() {
             claude auth status
             ;;
 
+        status)
+            check_status
+            ;;
+
         doctor)
             echo -e "${GREEN}Running diagnostics...${NC}"
             claude /doctor
@@ -285,6 +456,8 @@ main() {
             exit 1
             ;;
     esac
+
+    exit $exit_code
 }
 
 # Run main function

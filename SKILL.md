@@ -28,6 +28,35 @@ claude -p "create a login page"
 claude "create a login page"
 ```
 
+### TTY/PTY Solutions for Different Environments
+
+#### Docker Containers
+```dockerfile
+# Use docker run with -it flags
+docker run -it your-image ./scripts/claude-wrapper.sh task "analyze code"
+
+# Or use script command in Dockerfile
+RUN apt-get update && apt-get install -y script
+```
+
+#### CI/CD Pipelines
+```yaml
+# GitHub Actions example
+- name: Run Claude Code Analysis
+  run: |
+    export CLAUDE_CODE_TIMEOUT=600
+    script -q -c "claude -p 'analyze security issues'" /dev/null
+```
+
+#### Remote SSH Sessions
+```bash
+# Force TTY allocation
+ssh -t user@host "cd /path/to/project && ./scripts/claude-wrapper.sh task 'explain code'"
+
+# Use tmux/screen for persistent sessions
+tmux new-session -d -s claude "./scripts/claude-wrapper.sh interactive"
+```
+
 ## Prerequisites
 
 Claude Code must be installed:
@@ -320,16 +349,170 @@ claude -p --allowedTools "Read,Grep,Glob" "Review src/ for code quality issues"
 
 ## Best Practices
 
-1. **Start with print mode** (`-p`) for automation and scripting
-2. **Use subagents** for specialized tasks to keep context clean
-3. **Set budget limits** (`--max-budget-usd`) for cost control
-4. **Use permission modes** appropriately - `plan` for exploration, `acceptEdits` for trusted changes
-5. **Leverage worktrees** (`-w`) for parallel Claude Code sessions
-6. **Preload skills** into subagents for domain-specific knowledge
+### 1. Task Design and Delegation
+
+**Break Down Complex Tasks**
+```bash
+# ❌ Too complex for single task
+./scripts/claude-wrapper.sh task --write "build a full e-commerce app"
+
+# ✅ Break into manageable chunks
+./scripts/claude-wrapper.sh task --write "create user authentication system"
+./scripts/claude-wrapper.sh task --write "implement product catalog with search"
+./scripts/claude-wrapper.sh task --write "add shopping cart functionality"
+```
+
+**Use Progressive Enhancement**
+```bash
+# 1. Start with exploration (read-only)
+./scripts/claude-wrapper.sh task "analyze the authentication flow"
+
+# 2. Plan the implementation
+./scripts/claude-wrapper.sh task "design JWT-based auth architecture"
+
+# 3. Implement with write permissions
+./scripts/claude-wrapper.sh task --write "implement JWT authentication"
+```
+
+### 2. Context Management
+
+**Provide Relevant Context**
+```bash
+# Include specific files
+./scripts/claude-wrapper.sh task "review auth.js and middleware/auth.js for security issues"
+
+# Reference existing patterns
+./scripts/claude-wrapper.sh task "follow the patterns in src/components/ to create a new UserProfile component"
+```
+
+**Use Subagents for Specialization**
+```bash
+# Create focused subagents
+./scripts/claude-wrapper.sh task \
+  --agents '{
+    "security-scanner": {
+      "description": "Scans for security vulnerabilities",
+      "prompt": "Focus on OWASP Top 10, input validation, and secure coding practices",
+      "tools": ["Read", "Grep", "Glob"],
+      "model": "sonnet"
+    }
+  }' \
+  "Use security-scanner to audit src/api/"
+```
+
+### 3. Cost and Performance Optimization
+
+**Model Selection Strategy**
+- **Haiku**: Quick tasks, simple analysis, prototyping
+- **Sonnet**: General coding, architecture design, debugging
+- **Opus**: Complex algorithms, security audits, performance optimization
+
+```bash
+# Quick syntax check with Haiku
+./scripts/claude-wrapper.sh task --model haiku "check syntax in main.py"
+
+# Architecture design with Sonnet
+./scripts/claude-wrapper.sh task --model sonnet "design microservices architecture"
+
+# Complex algorithm with Opus
+./scripts/claude-wrapper.sh task --model opus --budget 20.00 "implement distributed consensus algorithm"
+```
+
+**Budget Management**
+```bash
+# Set project-wide budget
+export CLAUDE_CODE_BUDGET=5.00
+
+# Track usage
+./scripts/claude-wrapper.sh task --budget 2.00 --verbose "task with cost tracking"
+```
+
+### 4. Error Handling and Recovery
+
+**Graceful Failure Handling**
+```bash
+# Use timeouts to prevent hanging
+./scripts/claude-wrapper.sh task --timeout 300 "potentially long-running task"
+
+# Check for common issues first
+./scripts/claude-wrapper.sh task "verify node_modules exists and package.json is valid"
+```
+
+**Session Recovery**
+```bash
+# List available sessions
+./scripts/claude-wrapper.sh session
+
+# Resume specific session
+./scripts/claude-wrapper.sh session "feature-auth-2024"
+
+# Continue last session
+claude -c
+```
+
+### 5. Security Best Practices
+
+**Code Review Before Committing**
+```bash
+# Always review generated code
+./scripts/claude-wrapper.sh task --write "implement feature" > changes.md
+# Review changes.md before applying
+
+# Use diff to see changes
+./scripts/claude-wrapper.sh task --write "refactor auth" && git diff
+```
+
+**Secure Defaults**
+```bash
+# Start with minimal permissions
+./scripts/claude-wrapper.sh task --allowedTools "Read,Grep,Glob" "analyze code"
+
+# Gradually expand permissions
+./scripts/claude-wrapper.sh task --allowedTools "Read,Edit,Write" "refactor code"
+```
+
+### 6. Integration Patterns
+
+**From Makefiles**
+```makefile
+review:
+	@./scripts/claude-wrapper.sh review src/
+
+refactor:
+	@./scripts/claude-wrapper.sh refactor "$(PROMPT)"
+
+.PHONY: review refactor
+```
+
+**From NPM Scripts**
+```json
+{
+  "scripts": {
+    "code:review": "./scripts/claude-wrapper.sh review src/",
+    "code:explain": "./scripts/claude-wrapper.sh explain src/main.js",
+    "code:fix": "./scripts/claude-wrapper.sh fix"
+  }
+}
+```
+
+**From Python Scripts**
+```python
+import subprocess
+import os
+
+def claude_review(path="."):
+    """Run Claude Code review on specified path"""
+    script_path = "/Users/lengweiping/.openclaw/workspace/skills/claude-code/scripts/claude-wrapper.sh"
+    result = subprocess.run([script_path, "review", path],
+                          capture_output=True, text=True)
+    return result.stdout
+```
 
 ## Troubleshooting
 
-### Why Direct Calls Fail
+### TTY/PTY Issues
+
+#### Why Direct Calls Fail
 
 When calling Claude Code directly from OpenClaw or other automation tools:
 
@@ -371,6 +554,34 @@ exec({
 })
 ```
 
+#### Platform-Specific TTY Solutions
+
+**Docker/Containers**
+```dockerfile
+# Install script utility
+RUN apt-get update && apt-get install -y bsdutils
+
+# Use script to create TTY
+CMD ["script", "-q", "-c", "claude-wrapper.sh task 'analyze code'", "/dev/null"]
+```
+
+**GitHub Actions**
+```yaml
+- name: Claude Code Analysis
+  run: |
+    # Install expect for TTY support
+    sudo apt-get update && sudo apt-get install -y expect
+
+    # Run with TTY
+    unbuffer ./scripts/claude-wrapper.sh task "analyze security"
+```
+
+**Jenkins/CircleCI**
+```bash
+# Use script command in build steps
+script -q -c "./scripts/claude-wrapper.sh review src/" /dev/null
+```
+
 ### Authentication Issues
 
 **Problem**: "Not authenticated" error
@@ -380,11 +591,42 @@ claude auth status
 
 # Login
 claude auth login
+
+# For CI/CD, use environment variables
+echo "$CLAUDE_API_KEY" | claude auth login
 ```
 
-### Session not found
-- Use `claude -r` without arguments to see available sessions
-- Check `~/.claude/sessions/` for session files
+**Problem**: "Session expired" error
+```bash
+# Clear session cache
+rm -rf ~/.claude/sessions/
+
+# Re-authenticate
+claude auth login
+```
+
+### Session Management Issues
+
+**Session not found**
+```bash
+# List available sessions
+claude -r  # Shows all sessions
+
+# Check session directory
+ls -la ~/.claude/sessions/
+
+# Resume by partial name match
+claude -r "auth"  # Resumes session with "auth" in name
+```
+
+**Session corruption**
+```bash
+# Clear corrupted sessions
+rm ~/.claude/sessions/*
+
+# Or use specific session ID
+claude -r "session-id-12345"
+```
 
 ### Tool Approval Issues
 
@@ -396,6 +638,18 @@ claude -p --allowedTools "Read,Grep,Glob" "analyze code"
 
 # Allow read and write
 claude -p --allowedTools "Read,Edit,Write,Bash" "refactor code"
+
+# Allow specific bash commands only
+claude -p --allowedTools "Read,Bash(ls),Bash(grep),Bash(find)" "explore structure"
+```
+
+**Permission denied errors**
+```bash
+# Use permission modes
+claude -p --permission-mode acceptEdits "refactor code"
+
+# Bypass permissions (use carefully)
+claude -p --permission-mode bypassPermissions "emergency fix"
 ```
 
 ### Timeout Issues
@@ -405,7 +659,92 @@ Increase timeout for complex tasks:
 ```bash
 # Set longer timeout
 export CLAUDE_CODE_TIMEOUT=600
-./scripts/claude-wrapper.sh task --write "implement complex feature"
+./scripts/claude-wrapper.sh task --timeout 600 "implement complex feature"
+
+# Set infinite timeout (not recommended)
+./scripts/claude-wrapper.sh task --timeout 0 "very long task"
+```
+
+**Hanging commands**
+```bash
+# Check for background processes
+ps aux | grep claude
+
+# Kill hanging processes
+pkill -f claude
+
+# Run with strace for debugging
+strace -f ./scripts/claude-wrapper.sh task "debug this"
+```
+
+### Network and API Issues
+
+**Connection timeouts**
+```bash
+# Check network connectivity
+curl -I https://claude.ai
+
+# Set custom timeout
+export CLAUDE_API_TIMEOUT=60
+
+# Use proxy if behind firewall
+export HTTPS_PROXY=http://proxy.company.com:8080
+```
+
+**Rate limiting**
+```bash
+# Add delays between requests
+./scripts/claude-wrapper.sh task "task 1" && sleep 5 && ./scripts/claude-wrapper.sh task "task 2"
+
+# Use batch mode for multiple tasks
+./scripts/claude-batch-runner.sh tasks.txt --delay 5
+```
+
+### Model-Specific Issues
+
+**Opus model availability**
+```bash
+# Check model availability
+claude --model opus --help
+
+# Fallback to Sonnet if Opus unavailable
+./scripts/claude-wrapper.sh task --model sonnet "complex analysis"
+```
+
+**Context window exceeded**
+```bash
+# Split large codebases
+./scripts/claude-wrapper.sh task "analyze src/module1/"
+./scripts/claude-wrapper.sh task "analyze src/module2/"
+
+# Use grep to focus on specific patterns
+./scripts/claude-wrapper.sh task "search for 'TODO' comments in src/"
+```
+
+### Debugging Tools
+
+**Enable verbose logging**
+```bash
+# Verbose output
+./scripts/claude-wrapper.sh task --verbose "debug this issue"
+
+# Debug with trace
+bash -x ./scripts/claude-wrapper.sh task "analyze code"
+
+# Log to file
+./scripts/claude-wrapper.sh task "task" 2>&1 | tee claude-debug.log
+```
+
+**Run diagnostics**
+```bash
+# Claude Code doctor
+./scripts/claude-wrapper.sh doctor
+
+# System health check
+./scripts/claude-wrapper.sh task "check system requirements"
+
+# Configuration validation
+./scripts/claude-config-validator.sh
 ```
 
 ## References
